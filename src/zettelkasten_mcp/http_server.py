@@ -48,30 +48,13 @@ class ToolCallRequest(BaseModel):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(
-        title="Zettelkasten MCP Server",
-        description="HTTP/SSE transport for Zettelkasten MCP",
-        version=config.server_version,
-    )
 
-    # CORS configuration - restrict in production!
-    allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    from contextlib import asynccontextmanager
 
-    # Initialize the MCP server
-    mcp_server = None
-
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize the MCP server on startup."""
-        nonlocal mcp_server
-
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan context manager for startup and shutdown events."""
+        # Startup
         # Ensure directories exist
         notes_dir = config.get_absolute_path(config.notes_dir)
         notes_dir.mkdir(parents=True, exist_ok=True)
@@ -90,10 +73,33 @@ def create_app() -> FastAPI:
         try:
             logger.info("Initializing Zettelkasten MCP server")
             mcp_server = ZettelkastenMcpServer()
+            app.state.mcp_server = mcp_server
             logger.info("Zettelkasten MCP server ready")
         except Exception as e:
             logger.error(f"Failed to initialize MCP server: {e}")
             sys.exit(1)
+
+        yield
+
+        # Shutdown (if needed in future)
+        logger.info("Shutting down Zettelkasten MCP server")
+
+    app = FastAPI(
+        title="Zettelkasten MCP Server",
+        description="HTTP/SSE transport for Zettelkasten MCP",
+        version=config.server_version,
+        lifespan=lifespan,
+    )
+
+    # CORS configuration - restrict in production!
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/")
     async def root():
@@ -121,6 +127,9 @@ def create_app() -> FastAPI:
 
         Supports both regular HTTP and SSE upgrade for streaming responses.
         """
+        # Get MCP server from app state
+        mcp_server = request.app.state.mcp_server
+
         # Parse the request body
         try:
             body = await request.json()
@@ -168,19 +177,20 @@ def create_app() -> FastAPI:
 
             # Handle tools/list
             elif method == "tools/list":
-                # Get all registered tools from the MCP server
+                # Use FastMCP's built-in list_tools() method
+                tools_result = await mcp_server.mcp.list_tools()
+
+                # Convert to MCP protocol format
                 tools = []
-                for tool_name in dir(mcp_server.mcp):
-                    if tool_name.startswith("zk_"):
-                        # Extract tool info
-                        tools.append({
-                            "name": tool_name,
-                            "description": f"Zettelkasten tool: {tool_name}",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {},
-                            }
-                        })
+                for tool in tools_result.tools:
+                    tools.append({
+                        "name": tool.name,
+                        "description": tool.description or f"Zettelkasten tool: {tool.name}",
+                        "inputSchema": tool.inputSchema or {
+                            "type": "object",
+                            "properties": {},
+                        }
+                    })
 
                 response = {
                     "jsonrpc": "2.0",
@@ -234,28 +244,28 @@ def create_app() -> FastAPI:
 
 
 async def execute_tool(mcp_server: ZettelkastenMcpServer, tool_name: str, args: dict) -> str:
-    """Execute a tool on the MCP server."""
-    # Get the tool function
-    if not hasattr(mcp_server, tool_name):
-        # Try to get it from the registered tools
-        tool_func = None
-        for attr_name in dir(mcp_server):
-            if attr_name == tool_name:
-                tool_func = getattr(mcp_server, attr_name)
-                break
-
-        if not tool_func:
-            raise ValueError(f"Tool not found: {tool_name}")
-    else:
-        tool_func = getattr(mcp_server, tool_name)
-
-    # Execute the tool (most MCP tools are synchronous)
+    """Execute a tool on the MCP server using FastMCP's call_tool method."""
     try:
-        result = tool_func(**args)
-        return result
+        # Use FastMCP's built-in call_tool method
+        # This returns a list of TextContent objects
+        result = await mcp_server.mcp.call_tool(tool_name, args)
+
+        # result is a list of TextContent objects: [TextContent(text='...')]
+        if isinstance(result, list) and len(result) > 0:
+            first_item = result[0]
+            if hasattr(first_item, 'text'):
+                return first_item.text
+            else:
+                return str(first_item)
+        elif isinstance(result, str):
+            return result
+        else:
+            # Fallback: convert to string
+            return str(result)
+
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
-        return f"Error: {str(e)}"
+        raise ValueError(f"Error executing tool {tool_name}: {str(e)}")
 
 
 def main():
