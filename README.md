@@ -2,6 +2,12 @@
 
 A Model Context Protocol (MCP) server that implements the Zettelkasten knowledge management methodology, allowing you to create, link, explore and synthesize atomic notes through Claude and other MCP-compatible clients.
 
+## 📱 New: Mobile Access!
+
+You can now access your Zettelkasten from your mobile device!
+- **Quick Start (15 min):** [QUICKSTART_MOBILE.md](QUICKSTART_MOBILE.md)
+- **Complete Guide:** [REMOTE_ACCESS.md](REMOTE_ACCESS.md)
+
 ## What is Zettelkasten?
 
 The Zettelkasten method is a knowledge management system developed by German sociologist Niklas Luhmann, who used it to produce over 70 books and hundreds of articles. It consists of three core principles:
@@ -144,6 +150,8 @@ Then edit the file to configure your connection parameters.
 
 ### Starting the Server
 
+#### Local Mode (stdio - for Claude Desktop only)
+
 ```bash
 python -m zettelkasten_mcp.main
 ```
@@ -154,7 +162,25 @@ Or with explicit configuration:
 python -m zettelkasten_mcp.main --notes-dir ./data/notes --database-path ./data/db/zettelkasten.db
 ```
 
+#### Remote Mode (HTTP - for Mobile, Web, and Desktop)
+
+For remote access from mobile devices or multiple clients:
+
+```bash
+python -m zettelkasten_mcp.http_server
+```
+
+Or with custom host/port:
+
+```bash
+python -m zettelkasten_mcp.http_server --host 0.0.0.0 --port 8080
+```
+
+**📱 Want to use this on your phone?** See [REMOTE_ACCESS.md](REMOTE_ACCESS.md) for complete setup instructions with Cloudflare Tunnel!
+
 ### Connecting to Claude Desktop
+
+#### Local Connection (stdio)
 
 Add the following configuration to your Claude Desktop:
 
@@ -176,6 +202,23 @@ Add the following configuration to your Claude Desktop:
   }
 }
 ```
+
+#### Remote Connection (HTTP)
+
+For remote access via Cloudflare Tunnel or direct HTTP:
+
+```json
+{
+  "mcpServers": {
+    "zettelkasten-remote": {
+      "url": "https://your-tunnel-url.com/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+See [REMOTE_ACCESS.md](REMOTE_ACCESS.md) for complete setup instructions.
 
 ## Available MCP Tools
 

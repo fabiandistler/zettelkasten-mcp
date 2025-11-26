@@ -58,3 +58,7 @@ repomix-output.xml
 # Data files
 data/db/*.db
 data/notes/*.md
+
+# Cloudflare credentials (should be in ~/.cloudflared/)
+.cloudflared/
+*.json
