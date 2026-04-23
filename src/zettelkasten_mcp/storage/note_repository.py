@@ -226,8 +226,8 @@ class NoteRepository(Repository[Note]):
                 db_note.note_type = note.note_type.value
                 db_note.updated_at = note.updated_at
                 # Clear existing links and tags to rebuild them
-                session.execute(text(f"DELETE FROM links WHERE source_id = '{note.id}'"))
-                session.execute(text(f"DELETE FROM note_tags WHERE note_id = '{note.id}'"))
+                session.execute(text("DELETE FROM links WHERE source_id = :id"), {"id": note.id})
+                session.execute(text("DELETE FROM note_tags WHERE note_id = :id"), {"id": note.id})
             else:
                 # Create new note
                 db_note = DBNote(
@@ -464,7 +464,7 @@ class NoteRepository(Repository[Note]):
                         db_note.tags.append(db_tag)
                     
                     # For links, we'll delete existing links and add the new ones
-                    session.execute(text(f"DELETE FROM links WHERE source_id = '{note.id}'"))
+                    session.execute(text("DELETE FROM links WHERE source_id = :id"), {"id": note.id})
                     
                     # Add new links
                     for link in note.links:
@@ -505,9 +505,9 @@ class NoteRepository(Repository[Note]):
         # Delete from database
         with self.session_factory() as session:
             # Delete note and its relationships
-            session.execute(text(f"DELETE FROM links WHERE source_id = '{id}' OR target_id = '{id}'"))
-            session.execute(text(f"DELETE FROM note_tags WHERE note_id = '{id}'"))
-            session.execute(text(f"DELETE FROM notes WHERE id = '{id}'"))
+            session.execute(text("DELETE FROM links WHERE source_id = :id OR target_id = :id"), {"id": id})
+            session.execute(text("DELETE FROM note_tags WHERE note_id = :id"), {"id": id})
+            session.execute(text("DELETE FROM notes WHERE id = :id"), {"id": id})
             session.commit()
     
     def search(self, **kwargs: Any) -> List[Note]:
