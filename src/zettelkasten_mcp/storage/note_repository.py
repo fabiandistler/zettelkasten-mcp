@@ -190,13 +190,13 @@ class NoteRepository(Repository[Note]):
         created_str = metadata.get("created")
         created_at = (
             datetime.datetime.fromisoformat(created_str)
-            if created_str
+            if isinstance(created_str, str)
             else datetime.datetime.now()
         )
         updated_str = metadata.get("updated")
         updated_at = (
             datetime.datetime.fromisoformat(updated_str)
-            if updated_str
+            if isinstance(updated_str, str)
             else created_at
         )
         
