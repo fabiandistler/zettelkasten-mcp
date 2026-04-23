@@ -26,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "zettelkasten-mcp=zettelkasten_mcp.main:main",
+            "zettelkasten-cli=zettelkasten_mcp.cli:main",
         ],
     },
 )
