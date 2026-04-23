@@ -58,3 +58,5 @@ repomix-output.xml
 # Data files
 data/db/*.db
 data/notes/*.md
+.claude/
+.opencode/
