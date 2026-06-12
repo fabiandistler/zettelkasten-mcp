@@ -1,6 +1,7 @@
 """Utility functions for the Zettelkasten MCP server."""
 import logging
 import sys
+import time
 from datetime import datetime
 from typing import Optional
 

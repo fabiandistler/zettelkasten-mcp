@@ -1,6 +1,6 @@
 """Service for searching and discovering notes in the Zettelkasten."""
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from sqlalchemy import func, select, text
 
