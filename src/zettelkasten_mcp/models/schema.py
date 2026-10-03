@@ -1,14 +1,10 @@
 """Data models for the Zettelkasten MCP server."""
-import sys
-import time
 import datetime
+import threading
 from datetime import datetime as dt
-import random
-import inspect
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union
 from pydantic import BaseModel, Field, field_validator
-import threading
 
 # Thread-safe counter for uniqueness
 _id_lock = threading.Lock()

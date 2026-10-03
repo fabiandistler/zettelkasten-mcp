@@ -22,10 +22,14 @@ class NoteRepository(Repository[Note]):
     """Repository for note storage and retrieval.
     This implements a dual storage approach:
     1. Notes are stored as Markdown files on disk for human readability and editing
-    2. MySQL database is used for indexing and efficient querying
+    2. SQLite database is used for indexing and efficient querying
     The file system is the source of truth - database is rebuilt from files if needed.
     """
-    
+
+    # Batch sizes for different operations
+    REBUILD_BATCH_SIZE = 100  # Batch size for rebuilding index from files
+    QUERY_BATCH_SIZE = 50     # Batch size for loading notes from database
+
     def __init__(self, notes_dir: Optional[Path] = None):
         """Initialize the repository."""
         self.notes_dir = (
@@ -51,7 +55,7 @@ class NoteRepository(Repository[Note]):
         """Rebuild the database index from files if needed."""
         # Count notes in database
         with self.session_factory() as session:
-            db_count = session.scalar(select(text("COUNT(*)")).select_from(DBNote))
+            db_count = session.scalar(select(func.count()).select_from(DBNote))
         
         # Count note files
         file_count = len(list(self.notes_dir.glob("*.md")))
@@ -75,11 +79,10 @@ class NoteRepository(Repository[Note]):
         
         # Read all markdown files
         note_files = list(self.notes_dir.glob("*.md"))
-        
+
         # Process files in batches to avoid memory issues with large Zettelkasten systems
-        batch_size = 100
-        for i in range(0, len(note_files), batch_size):
-            batch = note_files[i:i + batch_size]
+        for i in range(0, len(note_files), self.REBUILD_BATCH_SIZE):
+            batch = note_files[i:i + self.REBUILD_BATCH_SIZE]
             notes = []
             
             # Read files
@@ -226,8 +229,8 @@ class NoteRepository(Repository[Note]):
                 db_note.note_type = note.note_type.value
                 db_note.updated_at = note.updated_at
                 # Clear existing links and tags to rebuild them
-                session.execute(text(f"DELETE FROM links WHERE source_id = '{note.id}'"))
-                session.execute(text(f"DELETE FROM note_tags WHERE note_id = '{note.id}'"))
+                session.execute(text("DELETE FROM links WHERE source_id = :id"), {"id": note.id})
+                session.execute(text("DELETE FROM note_tags WHERE note_id = :id"), {"id": note.id})
             else:
                 # Create new note
                 db_note = DBNote(
@@ -396,12 +399,11 @@ class NoteRepository(Repository[Note]):
             db_notes = result.unique().scalars().all()
             
             # Process notes in batches to reduce memory usage
-            batch_size = 50
             all_notes = []
             # Create batches of note IDs
             note_ids = [note.id for note in db_notes]
-            for i in range(0, len(note_ids), batch_size):
-                batch_ids = note_ids[i:i + batch_size]
+            for i in range(0, len(note_ids), self.QUERY_BATCH_SIZE):
+                batch_ids = note_ids[i:i + self.QUERY_BATCH_SIZE]
                 note_batch = []
                 # Process each note in the batch
                 for note_id in batch_ids:
@@ -464,7 +466,7 @@ class NoteRepository(Repository[Note]):
                         db_note.tags.append(db_tag)
                     
                     # For links, we'll delete existing links and add the new ones
-                    session.execute(text(f"DELETE FROM links WHERE source_id = '{note.id}'"))
+                    session.execute(text("DELETE FROM links WHERE source_id = :id"), {"id": note.id})
                     
                     # Add new links
                     for link in note.links:
@@ -505,9 +507,9 @@ class NoteRepository(Repository[Note]):
         # Delete from database
         with self.session_factory() as session:
             # Delete note and its relationships
-            session.execute(text(f"DELETE FROM links WHERE source_id = '{id}' OR target_id = '{id}'"))
-            session.execute(text(f"DELETE FROM note_tags WHERE note_id = '{id}'"))
-            session.execute(text(f"DELETE FROM notes WHERE id = '{id}'"))
+            session.execute(text("DELETE FROM links WHERE source_id = :id OR target_id = :id"), {"id": id})
+            session.execute(text("DELETE FROM note_tags WHERE note_id = :id"), {"id": id})
+            session.execute(text("DELETE FROM notes WHERE id = :id"), {"id": id})
             session.commit()
     
     def search(self, **kwargs: Any) -> List[Note]:
